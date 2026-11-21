@@ -18,8 +18,8 @@ The Gemini Media Aggregator is a Single Page Application (SPA) built with React 
 
 ## Core Concepts
 
-### 1. State Management (App.tsx)
-The application state is centralized in the root `App` component and is structured around **Sessions** and **Themes**.
+### 1. State Management (`hooks/useAppState.ts` → `contexts/AppContext.tsx`)
+The application state lives in the `useAppState()` hook and is shared with every view through `AppContext` (`useApp()`). It is structured around **Sessions** and **Themes**; `App.tsx` itself is now a thin router shell (see *1b. Routing & Code-Splitting*).
 - **Session**: A self-contained object representing a specific context.
   ```typescript
   interface Session {
@@ -58,8 +58,21 @@ The application state is centralized in the root `App` component and is structur
 - **Active Session**: The app tracks an `activeSessionId`. All uploads and chats occur within the context of the active session.
 - **Split View State**: Tracks `previewCode` (for artifacts) or `focusedMediaItem` (for media) to render a split-screen pane.
 
+### 1b. Routing & Code-Splitting
+`App.tsx` is a thin router shell: `<AppProvider>` → `<Suspense>` → `<Routes>`. Each top-level view has its own URL and its own module in `routes/`, declared once in `navigation.ts`:
+
+`/library` · `/workspace` · `/studio` · `/office_tools` · `/media` · `/miprompt` · `/finance` · `/maggi` · `/sxa_board`
+
+- `/` redirects to `/library`, or to `/workspace` when no sessions exist yet; unknown URLs render `routes/NotFoundRoute.tsx`.
+- Everything except the library and the shell is loaded with `React.lazy()` + `Suspense` (`routes/RouteFallback.tsx`), and `SessionModal` / `SettingsPanel` load on first open.
+- Navigation is `go(view)` from `useAppState()`; the old `viewMode` `if/else` chain is gone and `viewMode` is now derived from the URL.
+- Deep links work in both dev (`appType: 'spa'`) and production (`app.get('*all')` → `index.html`).
+- `mammoth` and `xlsx` are imported dynamically in `hooks/useSessionManager.ts`, so the document parsers only download when a `.docx`/`.xlsx` file is uploaded.
+
+Build budget: one 5.5 MB chunk (≈1.49 MB gzip) before, ≈1.25 MB entry (≈340 kB gzip) plus per-suite chunks after. Details in [`aDOCS/ARCHITECTURE.md`](aDOCS/ARCHITECTURE.md#1b-routing--code-splitting).
+
 ### 2. Services
-The app uses an abstraction layer in `App.tsx` to route requests to the correct service based on `settings.provider`.
+The app uses an abstraction layer in `services/unifiedAi.ts` (driven by `hooks/useAI.ts`) to route requests to the correct service based on `settings.provider`.
 
 #### `services/gemini.ts`
 Interacts directly with the Google GenAI API.
@@ -88,7 +101,7 @@ Unified provider-agnostic bridge used by interactive Creation Studio applets.
 - Dynamically resolves and routes generative prompts to either Gemini API (`services/gemini`), Ollama API (`services/ollama`), or Custom OpenAI-Compatible Endpoints (`services/customAi`) to ensure the entire creation workspace flows seamlessly.
 
 ### 3. Styling & Theming (Dynamic Engine)
-- **Engine**: The app uses a JavaScript-driven styling engine in `App.tsx` that performs real-time color math.
+- **Engine**: The app uses a JavaScript-driven styling engine in `hooks/useThemeEngine.ts` that performs real-time color math.
 - **HSL Color Processing**:
   - The engine converts base Hex colors to HSL (Hue, Saturation, Lightness).
   - **Hue Rotation**: Adds the `settings.hue` (0-360) value to the base color's Hue.

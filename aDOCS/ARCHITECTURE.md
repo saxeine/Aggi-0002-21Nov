@@ -18,8 +18,31 @@ The Gemini Media Aggregator is a Single Page Application (SPA) built with React 
 
 ## Core Concepts
 
-### 1. State Management (App.tsx)
-The application state is centralized in the root `App` component and is structured around **Sessions** and **Themes**.
+### 1. State Management (`hooks/useAppState.ts` → `contexts/AppContext.tsx`)
+The application state lives in a single `useAppState()` hook and is published to every view through `AppContext` (`useApp()`). It is structured around **Sessions** and **Themes**. `App.tsx` is a thin shell: `<AppProvider>` + `<Routes>` + Suspense, roughly 70 lines.
+
+### 1b. Routing & Code-Splitting
+Every top-level view is a real URL, declared in `navigation.ts` and mounted in `App.tsx`:
+
+| Route | Module | Bundling |
+| --- | --- | --- |
+| `/` | `routes/IndexRedirect.tsx` | redirects to `/library` (or `/workspace` when no sessions exist) |
+| `/library` | `routes/LibraryRoute.tsx` | initial bundle |
+| `/workspace` | `routes/WorkspaceRoute.tsx` | lazy (sources + chat + preview split view) |
+| `/studio` | `routes/StudioRoute.tsx` | lazy |
+| `/office_tools` | `routes/OfficeToolsRoute.tsx` | lazy |
+| `/media` | `routes/MediaRoute.tsx` | lazy |
+| `/miprompt` | `routes/MIPrOMPTRoute.tsx` | lazy |
+| `/finance` | `routes/FinanceRoute.tsx` | lazy |
+| `/maggi` | `routes/MaggiRoute.tsx` | lazy |
+| `/sxa_board` | `routes/SxaBoardRoute.tsx` | lazy |
+| `*` | `routes/NotFoundRoute.tsx` | not-found page |
+
+- **Navigation**: `useAppState()` exposes `viewMode` (derived from `useLocation()`) and `go(view)`, which replaces the old `setViewMode()` state. `App.tsx` no longer contains a view `if/else` chain.
+- **Lazy loading**: route modules are `React.lazy()` targets wrapped in a single `<Suspense>` whose fallback is `routes/RouteFallback.tsx`. `SessionModal` and `SettingsPanel` are lazy as well and only mount when opened. Shared modals are rendered once by `components/GlobalChrome.tsx` instead of once per view.
+- **Deep links**: `server.ts` already falls back to `index.html` (`app.get('*all')` in production, `appType: 'spa'` in dev), so `/studio`, `/media`, … survive a refresh.
+- **Deferred parsers**: `mammoth` (.docx) and `xlsx` (.xlsx) are dynamically imported inside `hooks/useSessionManager.ts` and only downloaded when such a file is uploaded.
+- **Bundle budget**: the pre-refactor build emitted one 5.5 MB chunk (≈1.49 MB gzip). The entry is now ≈1.25 MB (≈340 kB gzip) and each tool suite loads on first visit.
 - **Session**: A self-contained object representing a specific context.
   ```typescript
   interface Session {
@@ -57,7 +80,7 @@ The application state is centralized in the root `App` component and is structur
 - **Split View State**: Tracks `previewCode` (for artifacts) or `focusedMediaItem` (for media) to render a split-screen pane.
 
 ### 2. Services
-The app uses an abstraction layer in `App.tsx` to route requests to the correct service based on `settings.provider`.
+The app uses an abstraction layer in `services/unifiedAi.ts` (driven by `hooks/useAI.ts`) to route requests to the correct service based on `settings.provider`.
 
 #### `services/gemini.ts`
 Interacts directly with the Google GenAI API.
@@ -85,7 +108,7 @@ Unified provider-agnostic bridge used by interactive Creation Studio applets.
 - Dynamically resolves and routes generative prompts to either Gemini API (`services/gemini`), Ollama API (`services/ollama`), or Custom OpenAI-Compatible Endpoints (`services/customAi`) to ensure the entire creation workspace flows seamlessly.
 
 ### 3. Styling & Theming (Dynamic Engine)
-- **Engine**: The app uses a JavaScript-driven styling engine in `App.tsx` that performs real-time color math.
+- **Engine**: The app uses a JavaScript-driven styling engine in `hooks/useThemeEngine.ts` that performs real-time color math.
 - **HSL Color Processing**:
   - The engine converts base Hex colors to HSL (Hue, Saturation, Lightness).
   - **Hue Rotation**: Adds the `settings.hue` (0-360) value to the base color's Hue.

@@ -4,6 +4,7 @@ import { MediaItem, Session, Theme, ThemeSettings, VoiceSettings, CharacterPromp
 import CharacterLibraryModal from './CharacterLibraryModal';
 import { useLanguage } from '../contexts/LanguageContext';
 import { computePodcastGate, requiredRolesFor, PodcastRole, PodcastFormatId } from '../utils/podcastGating';
+import type { ViewId } from '../navigation';
 
 interface MediaPanelProps {
   activeTab: 'sessions' | 'sources' | 'tools' | 'audio';
@@ -44,7 +45,7 @@ interface MediaPanelProps {
   activeSettingsTab?: 'ai' | 'visual' | 'cast';
   onToggleSettings?: (tab: 'ai' | 'visual' | 'cast') => void;
   onCombineMedia?: (ids: string[], name: string) => void;
-  viewMode?: 'library' | 'workspace' | 'studio';
+  viewMode?: ViewId;
   characters?: CharacterPrompt[];
   onAddCharacter?: (char: Omit<CharacterPrompt, 'id' | 'category'>) => void;
   onUpdateCharacter?: (id: string, updates: Partial<CharacterPrompt>) => void;
