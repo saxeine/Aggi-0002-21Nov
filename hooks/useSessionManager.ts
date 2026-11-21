@@ -2,10 +2,11 @@
 import { useState, useEffect } from 'react';
 import { Session, MediaItem, Message } from '../types';
 import { loadSessionsFromDB, saveSessionsToDB } from '../services/storage';
-// @ts-ignore
-import * as mammoth from 'mammoth';
-// @ts-ignore
-import * as XLSX from 'xlsx';
+// `mammoth` (docx) and `xlsx` are only needed when the user actually uploads
+// a Word/Excel file, so they are loaded on demand instead of shipping ~1.5 MB
+// of parsers in the initial bundle.
+const loadMammoth = () => import('mammoth');
+const loadXLSX = () => import('xlsx');
 
 const STORAGE_KEY = 'gemini_media_aggregator_sessions';
 
@@ -305,8 +306,9 @@ export const useSessionManager = () => {
              reader.onload = async (e) => {
                try {
                  const arrayBuffer = e.target?.result as ArrayBuffer;
-                 // Use Mammoth to extract raw text
-                 const result = await mammoth.extractRawText({ arrayBuffer });
+                 // Use Mammoth to extract raw text (lazy-loaded)
+                 const mammoth: any = await loadMammoth();
+                 const result = await (mammoth.default ?? mammoth).extractRawText({ arrayBuffer });
                  const text = result.value;
                  // Encode text to base64 to store consistently
                  const b64 = btoa(unescape(encodeURIComponent(text)));
@@ -339,14 +341,16 @@ export const useSessionManager = () => {
 
           if (isExcel) {
              const reader = new FileReader();
-             reader.onload = (e) => {
+             reader.onload = async (e) => {
                try {
                  const data = new Uint8Array(e.target?.result as ArrayBuffer);
-                 const workbook = XLSX.read(data, { type: 'array' });
+                 const XLSX: any = await loadXLSX();
+                 const xlsx = XLSX.default ?? XLSX;
+                 const workbook = xlsx.read(data, { type: 'array' });
                  const firstSheetName = workbook.SheetNames[0];
                  const worksheet = workbook.Sheets[firstSheetName];
                  // Convert to CSV for text representation
-                 const csv = XLSX.utils.sheet_to_csv(worksheet);
+                 const csv = xlsx.utils.sheet_to_csv(worksheet);
                  
                  const b64 = btoa(unescape(encodeURIComponent(csv)));
                  
